@@ -96,9 +96,9 @@ int main(int argc, char** argv)
     for(int i=0; i< D*D; i++)
     {
         
-        A[i] = (double(i%100)/2);
-        B[i] = (double(i%100)/2);
-        C[i] = (double(i%100)/2);
+        A[i] = (double(i%100)/3);
+        B[i] = (double(i%100)/5);
+        C[i] = (double(i%100)/7);
 
     }
     
