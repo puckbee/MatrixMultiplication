@@ -123,6 +123,8 @@ int main(int argc, char** argv)
 
     }
 
+/*    
+
     MKL_MMult(D, D, D, A, D, B, D, refC, D);
 
 
@@ -141,7 +143,7 @@ int main(int argc, char** argv)
         std::cout<<" Check Pass! "<<std::endl;
     else
         std::cout<<" "<<err<<" errors occurred"<<std::endl;
-
+*/
 }
 
 /* Block sizes */
