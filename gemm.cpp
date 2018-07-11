@@ -376,6 +376,7 @@ void AddDot6x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+2) );   /* load and duplicate */
 //    a0_vreg.v = _mm256_permute2f128_pd(a0_vreg.v, a0_vreg.v, 0b00000001);
+//    a0_vreg.v = _mm256_permute4x64_pd(a0_vreg.v, 0b01001110);
     ro2 = _mm_load_pd((double*)(a+2));
     a0_vreg.v = _mm256_set_m128d(ro2, ro2);
     c20_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c20_vreg.v);
