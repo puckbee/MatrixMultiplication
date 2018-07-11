@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include "microtime.h"
 #include <stdio.h>
 
@@ -96,9 +97,9 @@ int main(int argc, char** argv)
     for(int i=0; i< D*D; i++)
     {
         
-        A[i] = (double(i%100)/3);
-        B[i] = (double(i%100)/5);
-        C[i] = (double(i%100)/7);
+        A[i] = (double(i%100)/2);
+        B[i] = (double(i%100)/2);
+        C[i] = (double(i%100)/2);
 
     }
     
@@ -128,7 +129,7 @@ int main(int argc, char** argv)
     int err=0;
     for(int i=0; i < D*D; i++)
     {
-       if(abs(refC[i] - C[i]) > 0.001*C[i])
+       if(std::abs(refC[i] - C[i]) > 0.001*C[i])
        {
            err++;
            printf(" refC[%d] = %f; C[%d] = %f \n", i, refC[i], i, C[i]);
@@ -154,13 +155,14 @@ int main(int argc, char** argv)
 
 /* Routine for computing C = A * B + C */
 
-void AddDot6x8( int, double *, int, double *, int, double *, int);
-void PackB_and_AddDot6x8( int, double *, int, double *, int, double *, int, double *, int);
+void AddDot6x8( int, double *, int, double *, int, double *, int, double*, int, int);
+void AddDot4x8( int, double *, int, double *, int, double *, int, double*, int, int);
+void PackB_and_AddDot6x8( int, double *, int, double *, int, double *, int, double *, int, double*, int, int);
 void PackMatrixA( int, double *, int, double *, int, int);
 void PackMatrixB( int, double *, int, double * );
-void InnerKernel( int, int, int, double *, int, double *, int, double *, int, int, double*, double*);
+void InnerKernel( int, int, int, double *, int, double *, int, double *, int, int, double*, double*, double*, int, int);
 void InnerKernel12x4( int, int, int, double *, int, double *, int, double *, int, int, double*, double*);
-void OutterKernel( int, int, int, double *, int, double *, int, double *, int, int, double*, double*);
+void OutterKernel( int, int, int, double *, int, double *, int, double *, int, int, double*, double*, double*, int, int);
 void PackKernel( int, int, int, double *, int, double *, int, double *, int, int, double*, double*);
 
 void MY_MMult( int m, int n, int k, double *a, int lda, 
@@ -169,17 +171,21 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
 {
   int i, p, pb, ib;
 
-  double* packedA = (double*) _mm_malloc(sizeof(double) * kc * mb * 2, 64);
-  double* packedB = (double*) _mm_malloc(sizeof(double) * kc * nc * 2, 64);
+  double* packedA = (double*) _mm_malloc(sizeof(double) * kc * mb, 64);
+  double* packedB = (double*) _mm_malloc(sizeof(double) * kc * nc, 64);
+  double* packedC = (double*) _mm_malloc(sizeof(double) * nc * m, 64);
+
+//  memset(packedC, 0, sizeof(double) * D * D);
 //  double* packedB = (double*) _mm_malloc(sizeof(double) * D * D * 2, 64);
 
-  for ( p=0; p<k; p+=kc ){
-    pb = min( k-p, kc );
     for ( i=0; i<n; i+=nc ){
       ib = min( n-i, nc );
+      for ( p=0; p<k; p+=kc ){
+      pb = min( k-p, kc );
 //      InnerKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB);
 //      OutterKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB + p*n+i*nc);
-      OutterKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB);
+      OutterKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB, packedC, p==0, (p+pb)>=k);
+
     }
   }
 
@@ -187,13 +193,13 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
 
 void OutterKernel( int m, int n, int k, double *a, int lda, 
                                        double *b, int ldb,
-                                       double *c, int ldc, int first_time, double* packedA, double* packedB)
+                                       double *c, int ldc, int first_time, double* packedA, double* packedB, double* packedC, int firstKC, int lastKC)
 {
     int i,j,p;
     for(i=0; i<m; i+=mcc)
     {
         for(j=0; j<n; j+=ncc)
-           InnerKernel( mcc, ncc, k, &A( i,0 ), lda, &B(0,j ), ldb, &C( i,j ), ldc, j==0, packedA, packedB);
+           InnerKernel( mcc, ncc, k, &A( i,0 ), lda, &B(0,j ), ldb, &C( i,j ), ldc, j==0, packedA, packedB, packedC + i * n + j * mcc, firstKC, lastKC); // (i/mcc * n/ncc + j/ncc) * mcc * ncc;
     }
 }
 
@@ -201,7 +207,7 @@ void OutterKernel( int m, int n, int k, double *a, int lda,
 
 void InnerKernel( int m, int n, int k, double *a, int lda, 
                                        double *b, int ldb,
-                                       double *c, int ldc, int first_time, double* packedA, double* packedB)
+                                       double *c, int ldc, int first_time, double* packedA, double* packedB, double* packedC, int firstKC, int lastKC)
 {
   int i, j;
 
@@ -214,13 +220,13 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
       if ( j == 0 ) 
       {
 //	      PackMatrixB( k, &B( 0, i ), ldb, &packedB[ i*k ]);
-          PackB_and_AddDot6x8( k, &packedA[ j*k ], 6, &B( 0, i ), ldb, &packedB[ i*k ], 8, &C( j,i ), ldc);
+          PackB_and_AddDot6x8( k, &packedA[ j*k ], 6, &B( 0, i ), ldb, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + i*6, firstKC, lastKC);
 //          AddDot6x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc);
       }
       else if(j==60)
-          AddDot4x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc);
+          AddDot4x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + i*4, firstKC, lastKC);
       else
-          AddDot6x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc);
+          AddDot6x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*6, firstKC, lastKC);
     }
   }
 }
@@ -306,7 +312,7 @@ int print256(std::string msg, v4df_t x)
 
 }
 
-void AddDot6x8( int k, double *a, int lda,  double *b, int ldb, double *c, int ldc)
+void AddDot6x8( int k, double *a, int lda,  double *b, int ldb, double *c, int ldc, double* packedC, int firstKC, int lastKC)
 {
 
   int p;
@@ -379,38 +385,142 @@ void AddDot6x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
     b += 8;
 
   }
- 
+
+/*
+      c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
+      c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
+      c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(1,0))); 
+      c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(&C(1,4)));   
+      c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(&C(2,0))); 
+      c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(&C(2,4))); 
+      c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(&C(3,0)));
+      c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(&C(3,4))); 
+      c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(&C(4,0)));
+      c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(&C(4,4))); 
+      c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(&C(5,0)));
+      c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(&C(5,4)));
+
+      _mm256_store_pd(&C(0, 0), c00_vreg.v);
+      _mm256_store_pd(&C(0, 4), c04_vreg.v);
+      _mm256_store_pd(&C(1, 0), c10_vreg.v);
+      _mm256_store_pd(&C(1, 4), c14_vreg.v);
+      _mm256_store_pd(&C(2, 0), c20_vreg.v);
+      _mm256_store_pd(&C(2, 4), c24_vreg.v);
+      _mm256_store_pd(&C(3, 0), c30_vreg.v);
+      _mm256_store_pd(&C(3, 4), c34_vreg.v);
+      _mm256_store_pd(&C(4, 0), c40_vreg.v);
+      _mm256_store_pd(&C(4, 4), c44_vreg.v);
+      _mm256_store_pd(&C(5, 0), c50_vreg.v);
+      _mm256_store_pd(&C(5, 4), c54_vreg.v);
+*/
+
+
+
+    if(lastKC)
+    {  
+      c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(packedC+0));   
+      c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(packedC+4));
+      c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(packedC+8)); 
+      c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(packedC+12));   
+      c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(packedC+16)); 
+      c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(packedC+20)); 
+      c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(packedC+24));
+      c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(packedC+28)); 
+      c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(packedC+32));
+      c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(packedC+36)); 
+      c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(packedC+40));
+      c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(packedC+44));
+
+      c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
+      c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
+      c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(1,0))); 
+      c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(&C(1,4)));   
+      c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(&C(2,0))); 
+      c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(&C(2,4))); 
+      c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(&C(3,0)));
+      c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(&C(3,4))); 
+      c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(&C(4,0)));
+      c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(&C(4,4))); 
+      c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(&C(5,0)));
+      c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(&C(5,4)));
+
+      _mm256_store_pd(&C(0, 0), c00_vreg.v);
+      _mm256_store_pd(&C(0, 4), c04_vreg.v);
+      _mm256_store_pd(&C(1, 0), c10_vreg.v);
+      _mm256_store_pd(&C(1, 4), c14_vreg.v);
+      _mm256_store_pd(&C(2, 0), c20_vreg.v);
+      _mm256_store_pd(&C(2, 4), c24_vreg.v);
+      _mm256_store_pd(&C(3, 0), c30_vreg.v);
+      _mm256_store_pd(&C(3, 4), c34_vreg.v);
+      _mm256_store_pd(&C(4, 0), c40_vreg.v);
+      _mm256_store_pd(&C(4, 4), c44_vreg.v);
+      _mm256_store_pd(&C(5, 0), c50_vreg.v);
+      _mm256_store_pd(&C(5, 4), c54_vreg.v);
+    }
+    else
+    
+    {
+        if(!firstKC)
+        {
+          c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(packedC+0));   
+          c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(packedC+4));
+          c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(packedC+8)); 
+          c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(packedC+12));   
+          c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(packedC+16)); 
+          c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(packedC+20)); 
+          c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(packedC+24));
+          c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(packedC+28)); 
+          c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(packedC+32));
+          c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(packedC+36)); 
+          c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(packedC+40));
+          c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(packedC+44));
+        }
+
+      _mm256_store_pd(packedC+0, c00_vreg.v);
+      _mm256_store_pd(packedC+4, c04_vreg.v);
+      _mm256_store_pd(packedC+8, c10_vreg.v);
+      _mm256_store_pd(packedC+12, c14_vreg.v);
+      _mm256_store_pd(packedC+16, c20_vreg.v);
+      _mm256_store_pd(packedC+20, c24_vreg.v);
+      _mm256_store_pd(packedC+24, c30_vreg.v);
+      _mm256_store_pd(packedC+28, c34_vreg.v);
+      _mm256_store_pd(packedC+32, c40_vreg.v);
+      _mm256_store_pd(packedC+36, c44_vreg.v);
+      _mm256_store_pd(packedC+40, c50_vreg.v);
+      _mm256_store_pd(packedC+44, c54_vreg.v);
+    }
+
+/*
   c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
   c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
-  c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(1,0))); 
-  c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(&C(1,4)));   
-  c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(&C(2,0))); 
-  c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(&C(2,4))); 
-  c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(&C(3,0)));
-  c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(&C(3,4))); 
-  c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(&C(4,0)));
-  c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(&C(4,4))); 
-  c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(&C(5,0)));
-  c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(&C(5,4)));
-
+  c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(0,8))); 
+  c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(&C(0,12)));   
+  c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(&C(0,16))); 
+  c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(&C(0,20))); 
+  c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(&C(0,24)));
+  c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(&C(0,28))); 
+  c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(&C(0,32)));
+  c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(&C(0,36))); 
+  c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(&C(0,40)));
+  c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(&C(0,44)));
 
   _mm256_store_pd(&C(0, 0), c00_vreg.v);
   _mm256_store_pd(&C(0, 4), c04_vreg.v);
-  _mm256_store_pd(&C(1, 0), c10_vreg.v);
-  _mm256_store_pd(&C(1, 4), c14_vreg.v);
-  _mm256_store_pd(&C(2, 0), c20_vreg.v);
-  _mm256_store_pd(&C(2, 4), c24_vreg.v);
-  _mm256_store_pd(&C(3, 0), c30_vreg.v);
-  _mm256_store_pd(&C(3, 4), c34_vreg.v);
-  _mm256_store_pd(&C(4, 0), c40_vreg.v);
-  _mm256_store_pd(&C(4, 4), c44_vreg.v);
-  _mm256_store_pd(&C(5, 0), c50_vreg.v);
-  _mm256_store_pd(&C(5, 4), c54_vreg.v);
-
+  _mm256_store_pd(&C(0, 8), c10_vreg.v);
+  _mm256_store_pd(&C(0, 12), c14_vreg.v);
+  _mm256_store_pd(&C(0, 16), c20_vreg.v);
+  _mm256_store_pd(&C(0, 20), c24_vreg.v);
+  _mm256_store_pd(&C(0, 24), c30_vreg.v);
+  _mm256_store_pd(&C(0, 28), c34_vreg.v);
+  _mm256_store_pd(&C(0, 32), c40_vreg.v);
+  _mm256_store_pd(&C(0, 36), c44_vreg.v);
+  _mm256_store_pd(&C(0, 40), c50_vreg.v);
+  _mm256_store_pd(&C(0, 44), c54_vreg.v);
+*/
 }
 
 
-void AddDot4x8( int k, double *a, int lda,  double *b, int ldb, double *c, int ldc)
+void AddDot4x8( int k, double *a, int lda,  double *b, int ldb, double *c, int ldc, double* packedC, int firstKC, int lastKC)
 {
 
   int p;
@@ -478,8 +588,8 @@ void AddDot4x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
 */
 
   }
- 
-//    _mm_prefetch((const char *)b+k*8, _MM_HINT_T1);
+
+  
   c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
   c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
   c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(1,0))); 
@@ -499,10 +609,64 @@ void AddDot4x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
   _mm256_store_pd(&C(3, 0), c30_vreg.v);
   _mm256_store_pd(&C(3, 4), c34_vreg.v);
 
+/*
+    if(lastKC)
+    {  
+      c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(packedC+0));   
+      c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(packedC+4));
+      c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(packedC+8)); 
+      c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(packedC+12));   
+      c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(packedC+16)); 
+      c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(packedC+20)); 
+      c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(packedC+24));
+      c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(packedC+28)); 
 
+      c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
+      c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
+      c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(1,0))); 
+      c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(&C(1,4)));   
+      c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(&C(2,0))); 
+      c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(&C(2,4))); 
+      c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(&C(3,0)));
+      c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(&C(3,4))); 
+
+      _mm256_store_pd(&C(0, 0), c00_vreg.v);
+      _mm256_store_pd(&C(0, 4), c04_vreg.v);
+      _mm256_store_pd(&C(1, 0), c10_vreg.v);
+      _mm256_store_pd(&C(1, 4), c14_vreg.v);
+      _mm256_store_pd(&C(2, 0), c20_vreg.v);
+      _mm256_store_pd(&C(2, 4), c24_vreg.v);
+      _mm256_store_pd(&C(3, 0), c30_vreg.v);
+      _mm256_store_pd(&C(3, 4), c34_vreg.v);
+    }
+    else
+    
+    {
+        if(!firstKC)
+        {
+          c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(packedC+0));   
+          c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(packedC+4));
+          c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(packedC+8)); 
+          c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(packedC+12));   
+          c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(packedC+16)); 
+          c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(packedC+20)); 
+          c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(packedC+24));
+          c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(packedC+28)); 
+        }
+
+      _mm256_store_pd(packedC+0, c00_vreg.v);
+      _mm256_store_pd(packedC+4, c04_vreg.v);
+      _mm256_store_pd(packedC+8, c10_vreg.v);
+      _mm256_store_pd(packedC+12, c14_vreg.v);
+      _mm256_store_pd(packedC+16, c20_vreg.v);
+      _mm256_store_pd(packedC+20, c24_vreg.v);
+      _mm256_store_pd(packedC+24, c30_vreg.v);
+      _mm256_store_pd(packedC+28, c34_vreg.v);
+    }
+*/
 }
 
-void PackB_and_AddDot6x8( int k, double *a, int lda, double *ob, int ldb,  double *b, int ldb2, double *c, int ldc)
+void PackB_and_AddDot6x8( int k, double *a, int lda, double *ob, int ldb,  double *b, int ldb2, double *c, int ldc, double* packedC, int firstKC, int lastKC)
 {
   int j;
 
@@ -597,8 +761,7 @@ void PackB_and_AddDot6x8( int k, double *a, int lda, double *ob, int ldb,  doubl
 */
 
   }
- 
-//    _mm_prefetch((const char *)b+k*8, _MM_HINT_T1);
+/* 
   c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
   c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
   c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(1,0))); 
@@ -625,6 +788,81 @@ void PackB_and_AddDot6x8( int k, double *a, int lda, double *ob, int ldb,  doubl
   _mm256_store_pd(&C(4, 4), c44_vreg.v);
   _mm256_store_pd(&C(5, 0), c50_vreg.v);
   _mm256_store_pd(&C(5, 4), c54_vreg.v);
+*/
+
+    if(lastKC)
+    {  
+      c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(packedC+0));   
+      c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(packedC+4));
+      c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(packedC+8)); 
+      c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(packedC+12));   
+      c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(packedC+16)); 
+      c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(packedC+20)); 
+      c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(packedC+24));
+      c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(packedC+28)); 
+      c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(packedC+32));
+      c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(packedC+36)); 
+      c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(packedC+40));
+      c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(packedC+44));
+
+      c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
+      c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
+      c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(1,0))); 
+      c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(&C(1,4)));   
+      c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(&C(2,0))); 
+      c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(&C(2,4))); 
+      c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(&C(3,0)));
+      c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(&C(3,4))); 
+      c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(&C(4,0)));
+      c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(&C(4,4))); 
+      c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(&C(5,0)));
+      c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(&C(5,4)));
+
+      _mm256_store_pd(&C(0, 0), c00_vreg.v);
+      _mm256_store_pd(&C(0, 4), c04_vreg.v);
+      _mm256_store_pd(&C(1, 0), c10_vreg.v);
+      _mm256_store_pd(&C(1, 4), c14_vreg.v);
+      _mm256_store_pd(&C(2, 0), c20_vreg.v);
+      _mm256_store_pd(&C(2, 4), c24_vreg.v);
+      _mm256_store_pd(&C(3, 0), c30_vreg.v);
+      _mm256_store_pd(&C(3, 4), c34_vreg.v);
+      _mm256_store_pd(&C(4, 0), c40_vreg.v);
+      _mm256_store_pd(&C(4, 4), c44_vreg.v);
+      _mm256_store_pd(&C(5, 0), c50_vreg.v);
+      _mm256_store_pd(&C(5, 4), c54_vreg.v);
+    }
+    else
+    
+    {
+        if(!firstKC)
+        {
+          c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(packedC+0));   
+          c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(packedC+4));
+          c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(packedC+8)); 
+          c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(packedC+12));   
+          c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(packedC+16)); 
+          c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(packedC+20)); 
+          c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(packedC+24));
+          c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(packedC+28)); 
+          c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(packedC+32));
+          c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(packedC+36)); 
+          c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(packedC+40));
+          c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(packedC+44));
+        }
+
+      _mm256_store_pd(packedC+0, c00_vreg.v);
+      _mm256_store_pd(packedC+4, c04_vreg.v);
+      _mm256_store_pd(packedC+8, c10_vreg.v);
+      _mm256_store_pd(packedC+12, c14_vreg.v);
+      _mm256_store_pd(packedC+16, c20_vreg.v);
+      _mm256_store_pd(packedC+20, c24_vreg.v);
+      _mm256_store_pd(packedC+24, c30_vreg.v);
+      _mm256_store_pd(packedC+28, c34_vreg.v);
+      _mm256_store_pd(packedC+32, c40_vreg.v);
+      _mm256_store_pd(packedC+36, c44_vreg.v);
+      _mm256_store_pd(packedC+40, c50_vreg.v);
+      _mm256_store_pd(packedC+44, c54_vreg.v);
+    }
 
 }
 
