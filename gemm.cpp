@@ -363,34 +363,38 @@ void AddDot6x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
     /* First row and second rows */
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) a );       /* load and duplicate */
-    a0_vreg.v = _mm256_load_pd( (double *) a );       /* load and duplicate */
+//    a0_vreg.v = _mm256_load_pd( (double *) a );       /* load and duplicate */
+    ro2 = _mm_load_pd((double*)(a));
+    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
     c00_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c00_vreg.v);
     c04_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c04_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+1) );   /* load and duplicate */
-//     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
+     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
     c10_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c10_vreg.v);
     c14_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c14_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+2) );   /* load and duplicate */
 //    a0_vreg.v = _mm256_permute2f128_pd(a0_vreg.v, a0_vreg.v, 0b00000001);
+    ro2 = _mm_load_pd((double*)(a+2));
+    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
     c20_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c20_vreg.v);
     c24_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c24_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+3) );   /* load and duplicate */
-//     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
+     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
     c30_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c30_vreg.v);
     c34_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c34_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+4) );   /* load and duplicate */
 
-//    ro2 = _mm_load_pd((double*)(a+4));
-//    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
+    ro2 = _mm_load_pd((double*)(a+4));
+    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
     c40_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c40_vreg.v);
     c44_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c44_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+5) );   /* load and duplicate */
-//     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
+     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
     c50_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c50_vreg.v);
     c54_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c54_vreg.v);
 
@@ -561,6 +565,7 @@ void AddDot4x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
   c30_vreg.v = zero_vreg.v;
   c34_vreg.v = zero_vreg.v;
 
+  __m128d ro2;
 
 #pragma noprefetch 
 #pragma unroll(8)
@@ -574,19 +579,25 @@ void AddDot4x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
     /* First row and second rows */
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) a );       /* load and duplicate */
-    a0_vreg.v = _mm256_load_pd( (double *) a );       /* load and duplicate */
+//    a0_vreg.v = _mm256_load_pd( (double *) a );       /* load and duplicate */
+    ro2 = _mm_load_pd((double*)(a));
+    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
     c00_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c00_vreg.v);
     c04_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c04_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+1) );   /* load and duplicate */
+     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
     c10_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c10_vreg.v);
     c14_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c14_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+2) );   /* load and duplicate */
+    ro2 = _mm_load_pd((double*)(a));
+    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
     c20_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c20_vreg.v);
     c24_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c24_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+3) );   /* load and duplicate */
+     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
     c30_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c30_vreg.v);
     c34_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c34_vreg.v);
 
@@ -720,6 +731,7 @@ void PackB_and_AddDot6x8( int k, double *a, int lda, double *ob, int ldb,  doubl
   c50_vreg.v = zero_vreg.v;
   c54_vreg.v = zero_vreg.v;
 
+  __m128d ro2;
 
 #pragma noprefetch 
 #pragma unroll(8)
@@ -736,33 +748,41 @@ void PackB_and_AddDot6x8( int k, double *a, int lda, double *ob, int ldb,  doubl
     //b00_vreg.v = (__m256d)_mm256_stream_load_si256((__m256i*)b_ij_pntr);
     //b04_vreg.v = (__m256d)_mm256_stream_load_si256((__m256i*)(b_ij_pntr+4));
 
-
-    a0_vreg.v = _mm256_load_pd( (double *) a );       /* load and duplicate */
+//    a0_vreg.v = _mm256_load_pd( (double *) a );       /* load and duplicate */
 //    a0_vreg.v = _mm256_set1_pd( *(double *) a );       /* load and duplicate */
+    ro2 = _mm_load_pd((double*)(a));
+    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
     c00_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c00_vreg.v);
     c04_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c04_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+1) );   /* load and duplicate */
+     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
     c10_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c10_vreg.v);
     c14_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c14_vreg.v);
 
     _mm256_store_pd(b_to, b00_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+2) );   /* load and duplicate */
+    ro2 = _mm_load_pd((double*)(a));
+    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
     c20_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c20_vreg.v);
     c24_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c24_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+3) );   /* load and duplicate */
+     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
     c30_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c30_vreg.v);
     c34_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c34_vreg.v);
 
     _mm256_store_pd(b_to+4, b04_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+4) );   /* load and duplicate */
+    ro2 = _mm_load_pd((double*)(a));
+    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
     c40_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c40_vreg.v);
     c44_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c44_vreg.v);
 
 //    a0_vreg.v = _mm256_set1_pd( *(double *) (a+5) );   /* load and duplicate */
+     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
     c50_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c50_vreg.v);
     c54_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c54_vreg.v);
 
