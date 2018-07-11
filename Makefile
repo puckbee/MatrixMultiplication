@@ -8,6 +8,8 @@
 all: gemm.cpp
 	icpc $(OPT_FLAG) gemm.cpp -o gemm
 debug:
-	icpc -O3 cnn_test.cpp mat.cpp -o cnn.test.g -g -lopenblas
+	icpc $(DEBUG_FLAG) gemm.cpp -o -g gemm
+assemble:
+	icpc $(OPT_FLAG) gemm.cpp -o gemm.s -S
 clean:
 	rm cnn.test *.o conv

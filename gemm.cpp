@@ -224,7 +224,7 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
 //          AddDot6x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc);
       }
       else if(j==60)
-          AddDot4x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + i*4, firstKC, lastKC);
+          AddDot4x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*4, firstKC, lastKC);
       else
           AddDot6x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*6, firstKC, lastKC);
     }
@@ -589,6 +589,7 @@ void AddDot4x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
 
   }
 
+  /*
   
   c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
   c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
@@ -609,7 +610,9 @@ void AddDot4x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
   _mm256_store_pd(&C(3, 0), c30_vreg.v);
   _mm256_store_pd(&C(3, 4), c34_vreg.v);
 
-/*
+*/
+
+
     if(lastKC)
     {  
       c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(packedC+0));   
@@ -663,7 +666,7 @@ void AddDot4x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
       _mm256_store_pd(packedC+24, c30_vreg.v);
       _mm256_store_pd(packedC+28, c34_vreg.v);
     }
-*/
+
 }
 
 void PackB_and_AddDot6x8( int k, double *a, int lda, double *ob, int ldb,  double *b, int ldb2, double *c, int ldc, double* packedC, int firstKC, int lastKC)
