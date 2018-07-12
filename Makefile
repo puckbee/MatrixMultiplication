@@ -12,4 +12,4 @@ debug:
 assemble:
 	icpc $(OPT_FLAG) gemm.cpp -o gemm.s -S
 clean:
-	rm cnn.test *.o conv
+	rm gemm
