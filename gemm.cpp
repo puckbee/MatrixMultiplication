@@ -151,7 +151,7 @@ int main(int argc, char** argv)
 /* Block sizes */
 #define kc 256
 #define nc 1024
-#define mcc 64
+#define mcc 96
 #define ncc 32
 #define mb D
 
@@ -225,7 +225,7 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
 //         if(outi ==2016 && outj == 352)
 //           printf(" when enter the function: firstKC = %d, packedC[0] = %f \n", firstKC, packedC[0]);
 
-  for ( j=0; j<m; j+=6 ){        /* Loop over the columns of C, unrolled by 4 */
+  for ( j=0; j<(m/6*6); j+=6 ){        /* Loop over the columns of C, unrolled by 4 */
     if ( first_time )
     {
       PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
@@ -242,8 +242,8 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
 //          if(outi == 2016 && outj == 352 && !firstKC)
 //              printf("outi = %d, outj = %d, c[0] = %f, packedC[0] = %f \n", outi, outj, C(j,i), packedC+j*n+i*6);
       }
-      else if(j==60)
-          AddDot4x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*4, firstKC, lastKC);
+//      else if(j==60)
+//          AddDot4x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*4, firstKC, lastKC);
       else
       {
           AddDot6x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*6, firstKC, lastKC);
@@ -252,7 +252,7 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
       }
     }
   }
-/*
+
   if(m==32)
   {
   for ( j=30; j<m; j+=2 ){       // Loop over the columns of C, unrolled by 4 
@@ -265,7 +265,7 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
     }
   }
   }
-*/
+
 
 }
 
