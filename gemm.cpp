@@ -149,7 +149,7 @@ int main(int argc, char** argv)
 /* Block sizes */
 #define kc 256
 #define nc 1024
-#define mcc 64
+#define mcc 96
 #define ncc 32
 #define mb D
 
@@ -197,11 +197,12 @@ void OutterKernel( int m, int n, int k, double *a, int lda,
                                        double *b, int ldb,
                                        double *c, int ldc, int first_time, double* packedA, double* packedB, double* packedC, int firstKC, int lastKC)
 {
-    int i,j,p;
+    int i,j,p, ib;
     for(i=0; i<m; i+=mcc)
     {
+      ib = min( m-i, mcc );
         for(j=0; j<n; j+=ncc)
-           InnerKernel( mcc, ncc, k, &A( i,0 ), lda, &B(0,j ), ldb, &C( i,j ), ldc, j==0, packedA, packedB, packedC + i * n + j * mcc, firstKC, lastKC); // (i/mcc * n/ncc + j/ncc) * mcc * ncc;
+           InnerKernel( ib, ncc, k, &A( i,0 ), lda, &B(0,j ), ldb, &C( i,j ), ldc, j==0, packedA, packedB, packedC + i * n + j * mcc, firstKC, lastKC); // (i/mcc * n/ncc + j/ncc) * mcc * ncc;
     }
 }
 
@@ -213,7 +214,7 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
 {
   int i, j;
 
-  for ( j=0; j<m; j+=6 ){        /* Loop over the columns of C, unrolled by 4 */
+  for ( j=0; j<(m/6*6); j+=6 ){        /* Loop over the columns of C, unrolled by 4 */
     if ( first_time )
     {
       PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
@@ -225,12 +226,24 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
           PackB_and_AddDot6x8( k, &packedA[ j*k ], 6, &B( 0, i ), ldb, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + i*6, firstKC, lastKC);
 //          AddDot6x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc);
       }
-      else if(j==60)
-          AddDot4x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*4, firstKC, lastKC);
+//      else if(j==60)
+//          AddDot4x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*4, firstKC, lastKC);
       else
           AddDot6x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*6, firstKC, lastKC);
     }
   }
+
+  for ( j=m/6*6; j<(m); j+=6 ){        /* Loop over the columns of C, unrolled by 4 */
+    if ( first_time )
+    {
+      PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
+    }
+    for ( i=0; i<n; i+=8 ){        /* Loop over the rows of C */
+       AddDot4x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*4, firstKC, lastKC);
+    }
+  }
+
+
 }
 
 void PackMatrixB( int k, double *b, int ldb, double *b_to)
@@ -260,7 +273,7 @@ void PackMatrixB( int k, double *b, int ldb, double *b_to)
 void PackMatrixA( int k, double *a, int lda, double *a_to, int j, int m)
 {
   int i;
-
+/*
   if(m==64 && j==60)       // only when 6x8; mcc = 64; in the last pack iteration
   {
       double 
@@ -269,7 +282,7 @@ void PackMatrixA( int k, double *a, int lda, double *a_to, int j, int m)
       
       v4df_t vreg;
 #pragma unroll(4)
-      for( i=0; i<k; i++){  /* loop over rows of B */
+      for( i=0; i<k; i++){ //  loop over rows of B 
         *a_to++ = *a_i0_pntr++;
         *a_to++ = *a_i1_pntr++;
         *a_to++ = *a_i2_pntr++;
@@ -278,6 +291,7 @@ void PackMatrixA( int k, double *a, int lda, double *a_to, int j, int m)
 
   }
   else
+*/      
   {
       double 
         *a_i0_pntr = &A( 0, 0 ), *a_i1_pntr = &A( 1, 0 ),
