@@ -204,6 +204,7 @@ void OutterKernel( int m, int n, int k, double *a, int lda,
                                        double *c, int ldc, int first_time, double* packedA, double* packedB, double* packedC, int firstKC, int lastKC)
 {
     int i,j,p, ib;
+
     for(i=0; i<m; i+=mcc)
     {
       ib = min( m-i, mcc );
@@ -229,20 +230,17 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
   for ( j=0; j<(m/6*6); j+=6 ){        /* Loop over the columns of C, unrolled by 4 */
     if ( first_time )
     {
-//      PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
+      PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
     }
     for ( i=0; i<n; i+=8 ){        /* Loop over the rows of C */
       if ( j == 0 ) 
       {
 //	      PackMatrixB( k, &B( 0, i ), ldb, &packedB[ i*k ]);
 
-          if(first_time && i==0)
-            PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
-
 //         if(outi ==2016 && outj == 352 && !firstKC)
 //           printf(" in Inner kernel packedC[0] = %f \n", packedC[0]);
           PackB_and_AddDot6x8( k, &packedA[ j*k ], 6, &B( 0, i ), ldb, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + i*6, firstKC, lastKC, outi, outj);
-//          AddDot6x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc);
+//          AddDot6x8( k, &packedA[ j*k ], lda, &packedB[ i*k ], ldb, &C( j,i ), ldc, packedC + j*n + i*6, firstKC, lastKC);
 //          if(outi == 2016 && outj == 352 && !firstKC)
 //              printf("outi = %d, outj = %d, c[0] = %f, packedC[0] = %f \n", outi, outj, C(j,i), packedC+j*n+i*6);
       }
@@ -250,12 +248,7 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
 //          AddDot4x8( k, &packedA[ j*k ], lda, &packedB[ i*k ], ldb, &C( j,i ), ldc, packedC + j*n + i*4, firstKC, lastKC);
       else
       {
-          if(first_time && i==0)
-            PackA_and_AddDot6x8( k, &A(j,0), lda, &packedA[j*k], &packedB[ i*k ], ldb, &C( j,i ), ldc, packedC + j*n + i*6, firstKC, lastKC);
-          else
             AddDot6x8( k, &packedA[ j*k ], lda, &packedB[ i*k ], ldb, &C( j,i ), ldc, packedC + j*n + i*6, firstKC, lastKC);
-          
-
       }
     }
   }
@@ -635,292 +628,6 @@ void AddDot6x8( int k, double *a, int lda,  double *b, int ldb, double *c, int l
 */
 }
 
-void PackA_and_AddDot6x8( int k, double *a, int lda, double *a_to,  double *b, int ldb, double *c, int ldc, double* packedC, int firstKC, int lastKC)
-{
-
-
-      
-  int p;
-  v4df_t
-      zero_vreg,
-
-      c00_vreg, c04_vreg,
-      c10_vreg, c14_vreg,
-      c20_vreg, c24_vreg,
-      c30_vreg, c34_vreg,
-      c40_vreg, c44_vreg,
-      c50_vreg, c54_vreg,
-
-    b00_vreg,
-    b04_vreg,
-
-    a0_vreg;
-
-  zero_vreg.v = _mm256_set1_pd(0);
-
-  c00_vreg.v = zero_vreg.v; 
-  c04_vreg.v = zero_vreg.v;
-  c10_vreg.v = zero_vreg.v;
-  c14_vreg.v = zero_vreg.v;
-  c20_vreg.v = zero_vreg.v;
-  c24_vreg.v = zero_vreg.v;
-  c30_vreg.v = zero_vreg.v;
-  c34_vreg.v = zero_vreg.v;
-  c40_vreg.v = zero_vreg.v;
-  c44_vreg.v = zero_vreg.v;
-  c50_vreg.v = zero_vreg.v;
-  c54_vreg.v = zero_vreg.v;
-
-  __m128d ro2;
-
-
-
-  double * a1 = a_to;
-
-      double 
-        *a_i0_pntr = &A( 0, 0 ), *a_i1_pntr = &A( 1, 0 ),
-        *a_i2_pntr = &A( 2, 0 ), *a_i3_pntr = &A( 3, 0 ),
-        *a_i4_pntr = &A( 4, 0 ), *a_i5_pntr = &A( 5, 0 );
-
-      v4df_t vreg;
-
-
-#pragma unroll(4)
-      for(int i=0; i<k; i++){  // loop over rows of B 
-        *a_to++ = *a_i0_pntr++;
-        *a_to++ = *a_i1_pntr++;
-        *a_to++ = *a_i2_pntr++;
-        *a_to++ = *a_i3_pntr++;
-        *a_to++ = *a_i4_pntr++;
-        *a_to++ = *a_i5_pntr++;
-        
-      }
-
-#pragma noprefetch 
-#pragma unroll(8)
-  for ( p=0; p<k; p++ ){
-    
-    _mm_prefetch((const char *)(b+32), _MM_HINT_T0);
-    _mm_prefetch((const char *)(b+36), _MM_HINT_T0);
-    _mm_prefetch((const char *)(a+24), _MM_HINT_T0);
-    
-    b00_vreg.v = _mm256_load_pd( (double *) b );
-    b04_vreg.v = _mm256_load_pd( (double *) (b+4) );
-
-
-    /* First row and second rows */
-
-//    a0_vreg.v = _mm256_set1_pd( *(double *) a );       /* load and duplicate */
-//    a0_vreg.v = _mm256_load_pd( (double *) a );       /* load and duplicate */
-//    ro2 = _mm_load_pd((double*)(a1));
-    ro2 = _mm_set_pd(*(double*)(a+lda), *(double*)(a));
-    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
-    c00_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c00_vreg.v);
-    c04_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c04_vreg.v);
-
-    _mm_store_pd(a_to, ro2);
-
-//    a0_vreg.v = _mm256_set1_pd( *(double *) (a+1) );   /* load and duplicate */
-     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
-    c10_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c10_vreg.v);
-    c14_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c14_vreg.v);
-
-
-
-//    a0_vreg.v = _mm256_set1_pd( *(double *) (a+2) );   /* load and duplicate */
-//    a0_vreg.v = _mm256_permute2f128_pd(a0_vreg.v, a0_vreg.v, 0b00000001);
-//    a0_vreg.v = _mm256_permute4x64_pd(a0_vreg.v, 0b01001110);
-//    ro2 = _mm_load_pd((double*)(a1+2));
-    ro2 = _mm_set_pd(*(double*)(a + lda*3), *(double*)(a + lda*2));
-    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
-    c20_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c20_vreg.v);
-    c24_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c24_vreg.v);
-
-    _mm_store_pd(a_to+2, ro2);
-//    a0_vreg.v = _mm256_set1_pd( *(double *) (a+3) );   /* load and duplicate */
-     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
-    c30_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c30_vreg.v);
-    c34_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c34_vreg.v);
-
-//    a0_vreg.v = _mm256_set1_pd( *(double *) (a+4) );   /* load and duplicate */
-
-    ro2 = _mm_set_pd(*(double*)(a + lda*5), *(double*)(a + lda * 4));
-//    ro2 = _mm_load_pd((double*)(a1+4));
-    a0_vreg.v = _mm256_set_m128d(ro2, ro2);
-    c40_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c40_vreg.v);
-    c44_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c44_vreg.v);
-
-    _mm_store_pd(a_to+4, ro2);
-//    a0_vreg.v = _mm256_set1_pd( *(double *) (a+5) );   /* load and duplicate */
-     a0_vreg.v = _mm256_permute_pd(a0_vreg.v, 0b0101);
-    c50_vreg.v = _mm256_fmadd_pd(b00_vreg.v, a0_vreg.v, c50_vreg.v);
-    c54_vreg.v = _mm256_fmadd_pd(b04_vreg.v, a0_vreg.v, c54_vreg.v);
-
-//    a1 += 6;
-    b += 8;
-    a_to += 6;
-    a++;
-
-  }
-
-/*
-      c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
-      c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
-      c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(1,0))); 
-      c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(&C(1,4)));   
-      c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(&C(2,0))); 
-      c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(&C(2,4))); 
-      c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(&C(3,0)));
-      c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(&C(3,4))); 
-      c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(&C(4,0)));
-      c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(&C(4,4))); 
-      c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(&C(5,0)));
-      c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(&C(5,4)));
-
-      _mm256_store_pd(&C(0, 0), c00_vreg.v);
-      _mm256_store_pd(&C(0, 4), c04_vreg.v);
-      _mm256_store_pd(&C(1, 0), c10_vreg.v);
-      _mm256_store_pd(&C(1, 4), c14_vreg.v);
-      _mm256_store_pd(&C(2, 0), c20_vreg.v);
-      _mm256_store_pd(&C(2, 4), c24_vreg.v);
-      _mm256_store_pd(&C(3, 0), c30_vreg.v);
-      _mm256_store_pd(&C(3, 4), c34_vreg.v);
-      _mm256_store_pd(&C(4, 0), c40_vreg.v);
-      _mm256_store_pd(&C(4, 4), c44_vreg.v);
-      _mm256_store_pd(&C(5, 0), c50_vreg.v);
-      _mm256_store_pd(&C(5, 4), c54_vreg.v);
-*/
-
-
-
-    if(lastKC)
-    {  
-      c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(packedC+0));   
-      c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(packedC+4));
-      c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(packedC+8)); 
-      c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(packedC+12));   
-      c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(packedC+16)); 
-      c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(packedC+20)); 
-      c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(packedC+24));
-      c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(packedC+28)); 
-      c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(packedC+32));
-      c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(packedC+36)); 
-      c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(packedC+40));
-      c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(packedC+44));
-
-      b00_vreg.v = _mm256_blend_pd(c00_vreg.v, c10_vreg.v, 0b1010);
-      b04_vreg.v = _mm256_blend_pd(c00_vreg.v, c10_vreg.v, 0b0101);
-      c00_vreg.v = b00_vreg.v;
-      c10_vreg.v = b04_vreg.v;
-      b00_vreg.v = _mm256_blend_pd(c04_vreg.v, c14_vreg.v, 0b1010);
-      b04_vreg.v = _mm256_blend_pd(c04_vreg.v, c14_vreg.v, 0b0101);
-      c04_vreg.v = b00_vreg.v;
-      c14_vreg.v = b04_vreg.v;
-      b00_vreg.v = _mm256_blend_pd(c20_vreg.v, c30_vreg.v, 0b1010);
-      b04_vreg.v = _mm256_blend_pd(c20_vreg.v, c30_vreg.v, 0b0101);
-      c20_vreg.v = b00_vreg.v;
-      c30_vreg.v = b04_vreg.v;
-      b00_vreg.v = _mm256_blend_pd(c24_vreg.v, c34_vreg.v, 0b1010);
-      b04_vreg.v = _mm256_blend_pd(c24_vreg.v, c34_vreg.v, 0b0101);
-      c24_vreg.v = b00_vreg.v;
-      c34_vreg.v = b04_vreg.v;
-      b00_vreg.v = _mm256_blend_pd(c40_vreg.v, c50_vreg.v, 0b1010);
-      b04_vreg.v = _mm256_blend_pd(c40_vreg.v, c50_vreg.v, 0b0101);
-      c40_vreg.v = b00_vreg.v;
-      c50_vreg.v = b04_vreg.v;
-      b00_vreg.v = _mm256_blend_pd(c44_vreg.v, c54_vreg.v, 0b1010);
-      b04_vreg.v = _mm256_blend_pd(c44_vreg.v, c54_vreg.v, 0b0101);
-      c44_vreg.v = b00_vreg.v;
-      c54_vreg.v = b04_vreg.v;
-
-
-      c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
-      c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
-      c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(1,0))); 
-      c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(&C(1,4)));   
-      c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(&C(2,0))); 
-      c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(&C(2,4))); 
-      c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(&C(3,0)));
-      c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(&C(3,4))); 
-      c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(&C(4,0)));
-      c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(&C(4,4))); 
-      c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(&C(5,0)));
-      c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(&C(5,4)));
-
-      _mm256_store_pd(&C(0, 0), c00_vreg.v);
-      _mm256_store_pd(&C(0, 4), c04_vreg.v);
-      _mm256_store_pd(&C(1, 0), c10_vreg.v);
-      _mm256_store_pd(&C(1, 4), c14_vreg.v);
-      _mm256_store_pd(&C(2, 0), c20_vreg.v);
-      _mm256_store_pd(&C(2, 4), c24_vreg.v);
-      _mm256_store_pd(&C(3, 0), c30_vreg.v);
-      _mm256_store_pd(&C(3, 4), c34_vreg.v);
-      _mm256_store_pd(&C(4, 0), c40_vreg.v);
-      _mm256_store_pd(&C(4, 4), c44_vreg.v);
-      _mm256_store_pd(&C(5, 0), c50_vreg.v);
-      _mm256_store_pd(&C(5, 4), c54_vreg.v);
-    }
-    else
-    
-    {
-        if(!firstKC)
-        {
-          c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(packedC+0));   
-          c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(packedC+4));
-          c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(packedC+8)); 
-          c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(packedC+12));   
-          c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(packedC+16)); 
-          c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(packedC+20)); 
-          c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(packedC+24));
-          c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(packedC+28)); 
-          c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(packedC+32));
-          c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(packedC+36)); 
-          c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(packedC+40));
-          c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(packedC+44));
-        }
-
-      _mm256_store_pd(packedC+0, c00_vreg.v);
-      _mm256_store_pd(packedC+4, c04_vreg.v);
-      _mm256_store_pd(packedC+8, c10_vreg.v);
-      _mm256_store_pd(packedC+12, c14_vreg.v);
-      _mm256_store_pd(packedC+16, c20_vreg.v);
-      _mm256_store_pd(packedC+20, c24_vreg.v);
-      _mm256_store_pd(packedC+24, c30_vreg.v);
-      _mm256_store_pd(packedC+28, c34_vreg.v);
-      _mm256_store_pd(packedC+32, c40_vreg.v);
-      _mm256_store_pd(packedC+36, c44_vreg.v);
-      _mm256_store_pd(packedC+40, c50_vreg.v);
-      _mm256_store_pd(packedC+44, c54_vreg.v);
-    }
-
-/*
-   c00_vreg.v = _mm256_add_pd(c00_vreg.v, _mm256_load_pd(&C(0,0)));   
-  c04_vreg.v = _mm256_add_pd(c04_vreg.v, _mm256_load_pd(&C(0,4)));
-  c10_vreg.v = _mm256_add_pd(c10_vreg.v, _mm256_load_pd(&C(0,8))); 
-  c14_vreg.v = _mm256_add_pd(c14_vreg.v, _mm256_load_pd(&C(0,12)));   
-  c20_vreg.v = _mm256_add_pd(c20_vreg.v, _mm256_load_pd(&C(0,16))); 
-  c24_vreg.v = _mm256_add_pd(c24_vreg.v, _mm256_load_pd(&C(0,20))); 
-  c30_vreg.v = _mm256_add_pd(c30_vreg.v, _mm256_load_pd(&C(0,24)));
-  c34_vreg.v = _mm256_add_pd(c34_vreg.v, _mm256_load_pd(&C(0,28))); 
-  c40_vreg.v = _mm256_add_pd(c40_vreg.v, _mm256_load_pd(&C(0,32)));
-  c44_vreg.v = _mm256_add_pd(c44_vreg.v, _mm256_load_pd(&C(0,36))); 
-  c50_vreg.v = _mm256_add_pd(c50_vreg.v, _mm256_load_pd(&C(0,40)));
-  c54_vreg.v = _mm256_add_pd(c54_vreg.v, _mm256_load_pd(&C(0,44)));
-
-  _mm256_store_pd(&C(0, 0), c00_vreg.v);
-  _mm256_store_pd(&C(0, 4), c04_vreg.v);
-  _mm256_store_pd(&C(0, 8), c10_vreg.v);
-  _mm256_store_pd(&C(0, 12), c14_vreg.v);
-  _mm256_store_pd(&C(0, 16), c20_vreg.v);
-  _mm256_store_pd(&C(0, 20), c24_vreg.v);
-  _mm256_store_pd(&C(0, 24), c30_vreg.v);
-  _mm256_store_pd(&C(0, 28), c34_vreg.v);
-  _mm256_store_pd(&C(0, 32), c40_vreg.v);
-  _mm256_store_pd(&C(0, 36), c44_vreg.v);
-  _mm256_store_pd(&C(0, 40), c50_vreg.v);
-  _mm256_store_pd(&C(0, 44), c54_vreg.v);
-*/
-}
 
 void AddDot4x8( int k, double *a, int lda,  double *b, int ldb, double *c, int ldc, double* packedC, int firstKC, int lastKC)
 {
