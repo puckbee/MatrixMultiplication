@@ -265,8 +265,20 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
     }
   }
   }
-
-
+/*
+  if(m==64)
+  {
+  for ( j=60; j<m; j+=4 ){       // Loop over the columns of C, unrolled by 4 
+    if ( first_time )
+    {
+      PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
+    }
+    for ( i=0; i<n; i+=8 ){        // Loop over the rows of C 
+       AddDot4x8( k, &packedA[ j*k ], 6, &packedB[ i*k ], 8, &C( j,i ), ldc, packedC + j*n + i*4, firstKC, lastKC);
+    }
+  }
+  }
+*/
 }
 
 void PackMatrixB( int k, double *b, int ldb, double *b_to)
