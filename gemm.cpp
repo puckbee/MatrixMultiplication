@@ -5,7 +5,6 @@
 #include <cmath>
 #include "microtime.h"
 #include <stdio.h>
-#include <omp.h>
 
 #include <immintrin.h>
 
@@ -151,7 +150,7 @@ int main(int argc, char** argv)
 
 /* Block sizes */
 #define kc 256
-#define nc 512
+#define nc 1024
 #define mc 2048
 #define mcc 96
 #define ncc 32
@@ -176,48 +175,28 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
                                     double *b, int ldb,
                                     double *c, int ldc )
 {
-  int s, sb;
+  int i, p, s, pb, ib, sb;
 
-  double* packedA = (double*) _mm_malloc(sizeof(double) * kc * mc * 4, 64);
-  double* packedB = (double*) _mm_malloc(sizeof(double) * kc * nc * 4, 64);
-  double* packedC = (double*) _mm_malloc(sizeof(double) * nc * mc * 4, 64);
+  double* packedA = (double*) _mm_malloc(sizeof(double) * kc * mc, 64);
+  double* packedB = (double*) _mm_malloc(sizeof(double) * kc * nc, 64);
+  double* packedC = (double*) _mm_malloc(sizeof(double) * nc * mc, 64);
 
 
 //  memset(packedC, 0, sizeof(double) * nc * m);
 //  double* packedB = (double*) _mm_malloc(sizeof(double) * D * D * 2, 64);
 
-  omp_set_num_threads(4);
-
-
+    for ( i=0; i<n; i+=nc ){
+      ib = min( n-i, nc );
       for(s=0; s<m; s+=mc){
           sb = min(m-s, mc);
-
-#pragma omp parallel num_threads(4)
-// for(int idx=0; idx<4;idx++)
- {
-     int idx = omp_get_thread_num();
-
-
-     if(idx==0){
-
-  int Nthrds = omp_get_num_threads();
-  printf("Nthrds = %d \n", Nthrds);
-     }
-
-//     int idx=0;
-//     if(idx==1)
-  int i, p, pb, ib;
-    for (i=idx*nc; i<(idx+1)*nc; i+=nc ){
-      ib = min( n-i, nc );
-      for (p=0; p<k; p+=kc ){
+      for ( p=0; p<k; p+=kc ){
       pb = min( k-p, kc );
 //      InnerKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB);
 //      OutterKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB + p*n+i*nc);
 //  printf(" packedC[2016,352] = %f \n", packedC[2016*2048+352]);
-      OutterKernel( sb, ib, pb, &A( s,p ), lda, &B(p, i ), ldb, &C( s,i ), ldc, i==0, packedA + kc*mc*idx, packedB + kc*nc*idx, packedC + nc*mc*idx, p==0, (p+pb)>=k);
+      OutterKernel( sb, ib, pb, &A( s,p ), lda, &B(p, i ), ldb, &C( s,i ), ldc, i==0, packedA, packedB, packedC, p==0, (p+pb)>=k);
     }
     }
- }
   }
 
 }
