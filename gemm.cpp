@@ -151,9 +151,9 @@ int main(int argc, char** argv)
 /* Block sizes */
 #define kc 256
 #define nc 1024
+#define mc 2048
 #define mcc 96
 #define ncc 32
-#define mb D
 
 #define min( i, j ) ( (i)<(j) ? (i): (j) )
 
@@ -175,16 +175,18 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
                                     double *b, int ldb,
                                     double *c, int ldc )
 {
-  int i, p, pb, ib;
+  int i, p, s, pb, ib, sb;
 
-  double* packedA = (double*) _mm_malloc(sizeof(double) * kc * mb, 64);
+  double* packedA = (double*) _mm_malloc(sizeof(double) * kc * mc, 64);
   double* packedB = (double*) _mm_malloc(sizeof(double) * kc * nc, 64);
-  double* packedC = (double*) _mm_malloc(sizeof(double) * nc * m, 64);
+  double* packedC = (double*) _mm_malloc(sizeof(double) * nc * mc, 64);
 
 
 //  memset(packedC, 0, sizeof(double) * nc * m);
 //  double* packedB = (double*) _mm_malloc(sizeof(double) * D * D * 2, 64);
 
+      for(s=0; s<m; s+=mc){
+          sb = min(m-s, mc);
     for ( i=0; i<n; i+=nc ){
       ib = min( n-i, nc );
       for ( p=0; p<k; p+=kc ){
@@ -192,8 +194,8 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
 //      InnerKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB);
 //      OutterKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB + p*n+i*nc);
 //  printf(" packedC[2016,352] = %f \n", packedC[2016*2048+352]);
-      OutterKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB, packedC, p==0, (p+pb)>=k);
-
+      OutterKernel( sb, ib, pb, &A( s,p ), lda, &B(p, i ), ldb, &C( s,i ), ldc, i==0, packedA, packedB, packedC, p==0, (p+pb)>=k);
+    }
     }
   }
 
@@ -203,13 +205,14 @@ void OutterKernel( int m, int n, int k, double *a, int lda,
                                        double *b, int ldb,
                                        double *c, int ldc, int first_time, double* packedA, double* packedB, double* packedC, int firstKC, int lastKC)
 {
-    int i,j,p, ib;
+    int i,j,p, ib, jb;
 
     for(i=0; i<m; i+=mcc)
     {
       ib = min( m-i, mcc );
         for(j=0; j<n; j+=ncc)
         {
+//            jb = min(n-j,ncc);
 //           if(i == 2016 && j == 352)
 //           printf(" n = %d, mcc = %d, ncc = %d, firstKC = %d, packedC[0] = %f \n", n, mcc, ncc, firstKC, packedC[i*n+j*mcc]);
            InnerKernel( ib, ncc, k, &A( i,0 ), lda, &B(0,j ), ldb, &C( i,j ), ldc, j==0, packedA, packedB, packedC + i * n + j * ib, firstKC, lastKC, i,j); // (i/mcc * n/ncc + j/ncc) * mcc * ncc;
@@ -233,7 +236,7 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
       PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
     }
     for ( i=0; i<n; i+=8 ){        /* Loop over the rows of C */
-      if ( j == 0 ) 
+      if ( j == 0 )
       {
 //	      PackMatrixB( k, &B( 0, i ), ldb, &packedB[ i*k ]);
 
