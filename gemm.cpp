@@ -59,7 +59,7 @@ void MKL_MMult( int m, int n, int k, double *a, int lda,
 	const float beta=1;
 
 #ifdef _MKL_
-    mkl_set_num_threads(1);
+//    mkl_set_num_threads(1);
 #endif
     
     
@@ -98,8 +98,10 @@ int main(int argc, char** argv)
     for(int i=0; i< D*D; i++)
     {
         
-        A[i] = (double(i%100)/2);
-        B[i] = (double(i%100)/2);
+//        A[i] = (double(i%100)/2) * (double(i%100)/2);
+//        B[i] = (double(i%100)/4) * (double(i%100)/4);
+        A[i] = i/2;
+        B[i] = i/2;
 //        C[i] = (double(i%100)/2);
         C[i] = 0;
         
@@ -150,11 +152,11 @@ int main(int argc, char** argv)
 }
 
 /* Block sizes */
-#define kc 256
+#define kc 128
 #define nc 512
 #define mc 2048
 #define mcc 96
-#define ncc 32
+#define ncc 128
 
 #define min( i, j ) ( (i)<(j) ? (i): (j) )
 
@@ -167,9 +169,9 @@ void PackB_and_AddDot6x8( int, double *, int, double *, int, double *, int, doub
 void PackA_and_AddDot6x8( int k, double *oa, int lda, double *a,  double *b, int ldb, double *c, int ldc, double* packedC, int firstKC, int lastKC);
 void PackMatrixA( int, double *, int, double *, int, int);
 void PackMatrixB( int, double *, int, double * );
-void InnerKernel( int, int, int, double *, int, double *, int, double *, int, int, double*, double*, double*, int, int, int, int);
+void InnerKernel( int, int, int, double *, int, double *, int, double *, int, int, double*, double*, double*, int, int, int, int, int);
 void InnerKernel12x4( int, int, int, double *, int, double *, int, double *, int, int, double*, double*);
-void OutterKernel( int, int, int, double *, int, double *, int, double *, int, int, double*, double*, double*, int, int);
+void OutterKernel( int, int, int, double *, int, double *, int, double *, int, int, double*, double*, double*, int, int, int);
 void PackKernel( int, int, int, double *, int, double *, int, double *, int, int, double*, double*);
 
 void MY_MMult( int m, int n, int k, double *a, int lda, 
@@ -178,8 +180,10 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
 {
   int s, sb;
 
-  double* packedA = (double*) _mm_malloc(sizeof(double) * kc * mc * 4, 64);
-  double* packedB = (double*) _mm_malloc(sizeof(double) * kc * nc * 4, 64);
+  double* packedA = (double*) _mm_malloc(sizeof(double) * kc * mcc * 4, 64);        // occupied a small area of memory
+//  double* packedA2 = (double*) _mm_malloc(sizeof(double) * kc * mc * 4, 64);
+  double* packedA2 = NULL;
+  double* packedB = (double*) _mm_malloc(sizeof(double) * kc * ncc * 4, 64);
   double* packedC = (double*) _mm_malloc(sizeof(double) * nc * mc * 4, 64);
 
 
@@ -197,18 +201,32 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
 // for(int idx=0; idx<4;idx++)
  {
      int idx = omp_get_thread_num();
+     int i, p, pb, ib, si, sib, sj, ssj;
+/*
+      for (p=0; p<k; p+=kc ){
+         pb = min( k-p, kc );
+         for(si=0; si<sb; si+=mcc)
+         {
+           sib = min( sb-si, mcc );
+           ssj=0;
+           for ( ssj=0; ssj<(sib/6*6); ssj+=6 ){       
+               printf(" A [ %d, %d ]\n", s+si+ssj, p);
+                PackMatrixA( pb, &A( s + si+ssj, p ), lda, &packedA2[kc*mc*idx+ (s+si+ssj)*kc ], ssj, sib);
+                printf(" packedA2[0] = %f\n", packedA2[0]);
 
-//     int idx=0;
-//     if(idx==1)
-  int i, p, pb, ib;
-    for (i=idx*nc; i<(idx+1)*nc; i+=nc ){
+           }
+         }
+      }
+*/
+
+
+    for (i=idx*(n/nc/4)*nc; i<(idx+1)*(n/nc/4)*nc; i+=nc ){
       ib = min( n-i, nc );
       for (p=0; p<k; p+=kc ){
       pb = min( k-p, kc );
 //      InnerKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB);
 //      OutterKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB + p*n+i*nc);
-//  printf(" packedC[2016,352] = %f \n", packedC[2016*2048+352]);
-      OutterKernel( sb, ib, pb, &A( s,p ), lda, &B(p, i ), ldb, &C( s,i ), ldc, i==0, packedA + kc*mc*idx, packedB + kc*nc*idx, packedC + nc*mc*idx, p==0, (p+pb)>=k);
+      OutterKernel( sb, ib, pb, &A( s,p ), lda, &B(p, i ), ldb, &C( s,i ), ldc, i==0, packedA + kc*mcc*idx, packedB + kc*ncc*idx, packedC + nc*mc*idx, p==0, (p+pb)>=k, idx);
     }
     }
  }
@@ -218,7 +236,7 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
 
 void OutterKernel( int m, int n, int k, double *a, int lda, 
                                        double *b, int ldb,
-                                       double *c, int ldc, int first_time, double* packedA, double* packedB, double* packedC, int firstKC, int lastKC)
+                                       double *c, int ldc, int first_time, double* packedA, double* packedB, double* packedC, int firstKC, int lastKC, int idx)
 {
     int i,j,p, ib, jb;
 
@@ -230,18 +248,16 @@ void OutterKernel( int m, int n, int k, double *a, int lda,
 //            jb = min(n-j,ncc);
 //           if(i == 2016 && j == 352)
 //           printf(" n = %d, mcc = %d, ncc = %d, firstKC = %d, packedC[0] = %f \n", n, mcc, ncc, firstKC, packedC[i*n+j*mcc]);
-           InnerKernel( ib, ncc, k, &A( i,0 ), lda, &B(0,j ), ldb, &C( i,j ), ldc, j==0, packedA, packedB, packedC + i * n + j * ib, firstKC, lastKC, i,j); // (i/mcc * n/ncc + j/ncc) * mcc * ncc;
+           InnerKernel( ib, ncc, k, &A( i,0 ), lda, &B(0,j ), ldb, &C( i,j ), ldc, j==0, packedA, packedB, packedC + i * n + j * ib, firstKC, lastKC, i,j, idx); // (i/mcc * n/ncc + j/ncc) * mcc * ncc;
         }
     }
 }
 
-
-
 void InnerKernel( int m, int n, int k, double *a, int lda, 
                                        double *b, int ldb,
-                                       double *c, int ldc, int first_time, double* packedA, double* packedB, double* packedC, int firstKC, int lastKC, int outi, int outj)
+                                       double *c, int ldc, int first_time, double* packedA, double* packedB, double* packedC, int firstKC, int lastKC, int outi, int outj, int idx)
 {
-  int i, j;
+  int i, j, sp;
 //         if(outi ==2016 && outj == 352)
 //           printf(" when enter the function: firstKC = %d, packedC[0] = %f \n", firstKC, packedC[0]);
 
@@ -249,6 +265,20 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
     if ( first_time )
     {
       PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
+/*
+      for(sp=j*k; sp < (j+1)*k; sp++)
+      {
+          int err=0;
+         if(std::abs(packedA[i] - packedA2[i]) > 0)
+         {
+            err++;
+            printf(" packedA[%d] = %f; packedA2[%d] = %f \n", sp, packedA[sp], sp, packedA2[sp]);
+         }
+         if(err == 0)
+             printf(" check packedA pass!\n");
+
+       }
+*/       
     }
     for ( i=0; i<n; i+=8 ){        /* Loop over the rows of C */
       if ( j == 0 )
@@ -283,7 +313,7 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
     }
   }
   }
-/*
+
   if(m==64)
   {
   for ( j=60; j<m; j+=4 ){       // Loop over the columns of C, unrolled by 4 
@@ -296,7 +326,7 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
     }
   }
   }
-*/
+
 }
 
 void PackMatrixB( int k, double *b, int ldb, double *b_to)
@@ -370,8 +400,11 @@ void PackMatrixA( int k, double *a, int lda, double *a_to, int j, int m)
 
 #pragma unroll(4)
       for( i=0; i<k; i++){  /* loop over rows of B */
+
         *a_to++ = *a_i0_pntr++;
+//        printf(" move %f from packedA to packedA2\n", *(a_to-1));
         *a_to++ = *a_i1_pntr++;
+//        printf(" move %f from packedA to packedA2\n", *(a_to-1));
         *a_to++ = *a_i2_pntr++;
         *a_to++ = *a_i3_pntr++;
         *a_to++ = *a_i4_pntr++;
