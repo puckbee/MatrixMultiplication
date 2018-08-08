@@ -152,9 +152,9 @@ int main(int argc, char** argv)
 }
 
 /* Block sizes */
-#define kc 128
-#define nc 512
-#define mc 2048
+#define kc 256
+#define nc 1024
+#define mc 512
 #define mcc 96
 #define ncc 128
 
@@ -178,7 +178,6 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
                                     double *b, int ldb,
                                     double *c, int ldc )
 {
-  int s, sb;
 
   double* packedA = (double*) _mm_malloc(sizeof(double) * kc * mcc * 4, 64);        // occupied a small area of memory
 //  double* packedA2 = (double*) _mm_malloc(sizeof(double) * kc * mc * 4, 64);
@@ -193,15 +192,16 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
   int Nthrds = omp_get_num_threads();
   printf("Nthrds = %d \n", Nthrds);
 
+int ib, i;
 
-      for(s=0; s<m; s+=mc){
-          sb = min(m-s, mc);
-
+      for(i=0; i<n; i+=nc){
+      ib = min( n-i, nc );
 #pragma omp parallel num_threads(4)
 // for(int idx=0; idx<4;idx++)
  {
      int idx = omp_get_thread_num();
-     int i, p, pb, ib, si, sib, sj, ssj;
+     int  p, pb, si, sib, sj, ssj;
+  int s, sb;
 /*
       for (p=0; p<k; p+=kc ){
          pb = min( k-p, kc );
@@ -220,8 +220,8 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
 */
 
 
-    for (i=idx*(n/nc/4)*nc; i<(idx+1)*(n/nc/4)*nc; i+=nc ){
-      ib = min( n-i, nc );
+    for (s=idx*(m/mc/4)*mc; s<(idx+1)*(m/mc/4)*mc; s+=mc ){
+          sb = min(m-s, mc);
       for (p=0; p<k; p+=kc ){
       pb = min( k-p, kc );
 //      InnerKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB);
