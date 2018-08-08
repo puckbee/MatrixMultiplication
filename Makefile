@@ -12,6 +12,8 @@ mkl: gemm.cpp
 	icpc $(MKL_FLAG) gemm.cpp -o gemm
 thread: gemm.cpp
 	icpc $(OPT_FLAG) gemm.cpp -o gemm -fopenmp
+thread-debug: gemm.cpp
+	icpc $(OPT_FLAG) gemm.cpp -o gemm -fopenmp -g
 debug:
 	icpc $(DEBUG_FLAG) gemm.cpp -g -o gemm
 assemble:
