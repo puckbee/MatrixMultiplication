@@ -128,8 +128,8 @@ int main(int argc, char** argv)
 
     }
 
-    
-
+    openblas_set_num_threads(4);
+    goto_set_num_threads(4);
     MKL_MMult(D, D, D, A, D, B, D, refC, D);
 
 
@@ -190,18 +190,23 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
 //  memset(packedC, 0, sizeof(double) * nc * m);
 //  double* packedB = (double*) _mm_malloc(sizeof(double) * D * D * 2, 64);
 
-  int Nthrds = omp_get_num_threads();
+  int Nthrds = omp_get_max_threads();
   printf("Nthrds = %d \n", Nthrds);
-
 
       for(i=0; i<n; i+=nc){
       ib = min( n-i, nc );
 
-#pragma omp parallel num_threads(4)
+// #pragma omp parallel num_threads(4)
+#pragma omp parallel
 // for(int idx=0; idx<4;idx++)
  {
-     int idx = omp_get_thread_num();
-     int s, p, pb, sb, si, sib, sj, ssj;
+      int idx = omp_get_thread_num();
+      // printf("Thread number = %d \n", idx);
+
+      // int Nthrds = omp_get_num_threads();
+      // printf("Nthrds = %d \n", Nthrds);
+
+      int s, p, pb, sb, si, sib, sj, ssj;
 /*
       for (p=0; p<k; p+=kc ){
          pb = min( k-p, kc );
@@ -211,7 +216,8 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
            ssj=0;
            for ( ssj=0; ssj<(sib/6*6); ssj+=6 ){       
                printf(" A [ %d, %d ]\n", s+si+ssj, p);
-                PackMatrixA( pb, &A( s + si+ssj, p ), lda, &packedA2[kc*mc*idx+ (s+si+ssj)*kc ], ssj, sib);
+                PackMatrixA( pb, &A( s + si+ssj, p ), lda, &packedA2[kc*mc*idx+ (s+si+ssj)*kc ], ssj, sib);     int idx = omp_get_thread_num();
+
                 printf(" packedA2[0] = %f\n", packedA2[0]);
 
            }
