@@ -15,8 +15,11 @@
 #include <mkl_cblas.h>
 #include <mkl.h>
 #elif _OPENBLAS_
+#ifdef _SUBDIR_
 #include <openblas/cblas.h>
-// #include <cblas.h>
+#else
+#include <cblas.h>
+#endif
 #endif
 
 #ifndef D
@@ -197,8 +200,8 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
       for(i=0; i<n; i+=nc){
       ib = min( n-i, nc );
 
-// #pragma omp parallel num_threads(4)
-#pragma omp parallel
+ #pragma omp parallel num_threads(4)
+//#pragma omp parallel
 // for(int idx=0; idx<4;idx++)
  {
       int idx = omp_get_thread_num();
