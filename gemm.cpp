@@ -156,11 +156,11 @@ int main(int argc, char** argv)
 }
 
 /* Block sizes */
-#define kc 128
+#define kc 256
 #define nc 1024
 #define mc 1024
-#define mcc 96
-#define ncc 128
+#define mcc 192
+#define ncc 64
 
 #define min( i, j ) ( (i)<(j) ? (i): (j) )
 
