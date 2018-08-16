@@ -156,7 +156,7 @@ int main(int argc, char** argv)
 }
 
 /* Block sizes */
-#define kc 256
+#define kc 128
 #define nc 1024
 #define mc 1024
 #define mcc 96
@@ -197,10 +197,14 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
   int Nthrds = omp_get_max_threads();
   printf("Nthrds = %d \n", Nthrds);
 
+  Nthrds = 4;
+
+  int blockSize = m / Nthrds;
+
+
       for(i=0; i<n; i+=nc){
       ib = min( n-i, nc );
-
- #pragma omp parallel num_threads(4)
+ #pragma omp parallel num_threads(Nthrds)
 //#pragma omp parallel
 // for(int idx=0; idx<4;idx++)
  {
@@ -230,8 +234,8 @@ void MY_MMult( int m, int n, int k, double *a, int lda,
 */
 
 
-    for (s=idx*(m/mc/4)*mc; s<(idx+1)*(m/mc/4)*mc; s+=mc ){
-          sb = min(m-s, mc);
+    for (s=idx*blockSize; s<(idx+1)*blockSize; s+=mc ){
+          sb = min((idx+1)*blockSize-s, mc);
       for (p=0; p<k; p+=kc ){
       pb = min( k-p, kc );
 //      InnerKernel( m, ib, pb, &A( 0,p ), lda, &B(p, i ), ldb, &C( 0,i ), ldc, i==0, packedA, packedB);
