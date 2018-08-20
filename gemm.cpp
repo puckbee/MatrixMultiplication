@@ -152,8 +152,8 @@ int main(int argc, char** argv)
 #define kc 256
 #define nc 1024
 #define mc 2048
-#define mcc 96
-#define ncc 32
+#define mcc 192
+#define ncc 64
 
 #define min( i, j ) ( (i)<(j) ? (i): (j) )
 
@@ -256,9 +256,9 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
     }
   }
 
-  if(m==32)
+  if(m==128)
   {
-  for ( j=30; j<m; j+=2 ){       // Loop over the columns of C, unrolled by 4 
+  for ( j=126; j<m; j+=2 ){       // Loop over the columns of C, unrolled by 4 
     if ( first_time )
     {
       PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
@@ -328,7 +328,7 @@ void PackMatrixA( int k, double *a, int lda, double *a_to, int j, int m)
       }
 
   }
-  else if (m==32 &&j==30)
+  else if ( (m==32 &&j==30) || (m==128 && j==126))
   {
       double 
         *a_i0_pntr = &A( 0, 0 ), *a_i1_pntr = &A( 1, 0 );
