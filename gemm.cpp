@@ -151,9 +151,17 @@ int main(int argc, char** argv)
 /* Block sizes */
 #define kc 256
 #define nc 1024
+#define mc 1024
+#define mcc 1024
+#define ncc 512
+
+/* three level
+#define kc 256
+#define nc 1024
 #define mc 2048
-#define mcc 192
-#define ncc 64
+#define mcc 96
+#define ncc 32
+*/
 
 #define min( i, j ) ( (i)<(j) ? (i): (j) )
 
@@ -256,9 +264,9 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
     }
   }
 
-  if(m==128)
+  if(m==128 || m==32)
   {
-  for ( j=126; j<m; j+=2 ){       // Loop over the columns of C, unrolled by 4 
+  for ( ; j<m; j+=2 ){       // Loop over the columns of C, unrolled by 4 
     if ( first_time )
     {
       PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
@@ -268,10 +276,10 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
     }
   }
   }
-/*
-  if(m==64)
+
+  if(m==64 || m==1024)
   {
-  for ( j=60; j<m; j+=4 ){       // Loop over the columns of C, unrolled by 4 
+  for ( ; j<m; j+=4 ){       // Loop over the columns of C, unrolled by 4 
     if ( first_time )
     {
       PackMatrixA( k, &A( j, 0 ), lda, &packedA[ j*k ], j, m);
@@ -281,7 +289,7 @@ void InnerKernel( int m, int n, int k, double *a, int lda,
     }
   }
   }
-*/
+
 }
 
 void PackMatrixB( int k, double *b, int ldb, double *b_to)
@@ -312,7 +320,7 @@ void PackMatrixA( int k, double *a, int lda, double *a_to, int j, int m)
 {
   int i;
 
-  if(m==64 && j==60)       // only when 6x8; mcc = 64; in the last pack iteration
+  if((m==1024 && j==1020) || (m==64 && j==60))       // only when 6x8; mcc = 64; in the last pack iteration
   {
       double 
         *a_i0_pntr = &A( 0, 0 ), *a_i1_pntr = &A( 1, 0 ),
