@@ -11,7 +11,7 @@ all: gemm.cpp
 	icpc $(OPT_FLAG) $(SERIAL_FLAG) gemm.cpp -o gemm
 
 mkl: gemm.cpp
-	icpc $(MKL_FLAG) gemm.cpp -o gemm
+	icpc $(MKL_FLAG) gemm.cpp -o gemm -fopenmp
 
 mt-pthread: gemm.cpp
 	icpc $(OPT_FLAG) $(PTHREAD_FLAG) gemm.cpp -o gemm -fopenmp

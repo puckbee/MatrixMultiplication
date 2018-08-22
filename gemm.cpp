@@ -131,9 +131,10 @@ int main(int argc, char** argv)
         std::cout<<" elapsed time when D="<< D<<" is "<< t2 - t1 << "s"<<std::endl;
 
     }
-
+#ifdef _OPENBLAS_
     openblas_set_num_threads(4);
     goto_set_num_threads(4);
+#endif    
     MKL_MMult(D, D, D, A, D, B, D, refC, D);
 
 
