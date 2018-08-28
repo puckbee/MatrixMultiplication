@@ -1,3 +1,4 @@
+
 MKL_FLAG= -mkl -D_MKL_ -O3 -march=core-avx2 -DD=4096
 
 OPT_FLAG= -D_OPENBLAS_ -march=core-avx2 -O3 -DD=4096 -xCORE-AVX2
